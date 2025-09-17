@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Blast Ultimate</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+body {
+  margin:0;
+  font-family:'Press Start 2P', cursive;
+  background:#111;
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  min-height:100vh;
+}
+h1 {margin:20px 0 10px 0;}
+#score-board {margin-bottom:10px;font-size:20px;}
+canvas {background:#333; border-radius:10px;}
+#blocks-container-canvas {margin-top:15px; border-radius:10px; background:#222;}
+button {margin:15px 5px; padding:10px 20px; font-size:16px; border-radius:8px; border:none; cursor:pointer; background:#555; color:#fff;}
+button:hover {background:#777;}
+</style>
+</head>
+<body>
+<h1>Block Blast Ultimate</h1>
+<div id="score-board">Score: 0</div>
+<canvas id="game-canvas" width="420" height="420"></canvas>
+<canvas id="blocks-container-canvas" width="420" height="100"></canvas>
+<div>
+  <button id="restart">Restart</button>
+  <button id="toggle-sound">Play / Pause Sound</button>
+</div>
+
+<!-- Audio -->
+<audio id="bg-sound" loop autoplay>
+  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+</audio>
+<audio id="place-sound">
+  <source src="https://www.soundjay.com/buttons/sounds/button-16.mp3" type="audio/mpeg">
+</audio>
+<audio id="good-sound">
+  <source src="https://www.soundjay.com/button/sounds/button-10.mp3" type="audio/mpeg">
+</audio>
+<audio id="great-sound">
+  <source src="https://www.soundjay.com/button/sounds/button-3.mp3" type="audio/mpeg">
+</audio>
+<audio id="excellent-sound">
+  <source src="https://www.soundjay.com/button/sounds/button-09.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const canvas=document.getElementById('game-canvas');
+const ctx=canvas.getContext('2d');
+const blocksCanvas=document.getElementById('blocks-container-canvas');
+const bctx=blocksCanvas.getContext('2d');
+const scoreBoard=document.getElementById('score-board');
+const restartBtn=document.getElementById('restart');
+const toggleSoundBtn=document.getElementById('toggle-sound');
+const bgSound=document.getElementById('bg-sound');
+const placeSound=document.getElementById('place-sound');
+const goodSound=document.getElementById('good-sound');
+const greatSound=document.getElementById('great-sound');
+const excellentSound=document.getElementById('excellent-sound');
+
+const rows=10, cols=10, cellSize=40;
+let board=[], score=0, selectedBlock=null, previewPos={x:-1,y:-1};
+let animatingBlocks=[];
+let floatingTexts=[];
+let particles=[];
+
+const blockShapes=[
+  {color:'#e74c3c',shape:[[1],[1],[1]]},
+  {color:'#3498db',shape:[[1,1,1]]},
+  {color:'#f1c40f',shape:[[1,1],[1,1]]},
+  {color:'#9b59b6',shape:[[1,1,0],[0,1,1]]},
+  {color:'#1abc9c',shape:[[0,1,1],[1,1,0]]},
+  {color:'#e67e22',shape:[[1,1,1],[1,1,1],[1,1,1]]}, // 3x3
+  {color:'#2ecc71',shape:[[1,1],[1,1]]}, // 2x2
+  {color:'#e84393',shape:[[1,1]]} // 2x1
+];
+
+let containerBlocks=[];
+let usedBlocksCount=0;
+
+function initBoard(){
+  board=[];
+  for(let r=0;r<rows;r++){
+    board[r]=[];
+    for(let c=0;c<cols;c++) board[r][c]=null;
+  }
+  score=0;
+  scoreBoard.textContent='Score: '+score;
+  usedBlocksCount=0;
+  containerBlocks=[];
+  generateContainerBlocks();
+}
+
+function drawBoard(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      ctx.fillStyle=board[r][c]||'#222';
+      ctx.fillRect(c*cellSize,r*cellSize,cellSize,cellSize);
+      ctx.strokeStyle='#111';
+      ctx.strokeRect(c*cellSize,r*cellSize,cellSize,cellSize);
+    }
+  }
+  if(selectedBlock && previewPos.x>=0 && previewPos.y>=0){
+    const shape=selectedBlock.shape;
+    const color=selectedBlock.color;
+    for(let i=0;i<shape.length;i++){
+      for(let j=0;j<shape[i].length;j++){
+        if(shape[i][j]){
+          const r=previewPos.y+i;
+          const c=previewPos.x+j;
+          if(r<rows && c<cols && !board[r][c]){
+            ctx.fillStyle=color;
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(c*cellSize,r*cellSize,cellSize,cellSize);
+            ctx.globalAlpha=1;
+          }
+        }
+      }
+    }
+  }
+  animatingBlocks.forEach((b,index)=>{
+    ctx.fillStyle=b.color;
+    ctx.globalAlpha=b.alpha;
+    const size=cellSize*b.scale;
+    ctx.fillRect(b.c*cellSize+(cellSize-size)/2,b.r*cellSize+(cellSize-size)/2,size,size);
+    ctx.globalAlpha=1;
+    b.alpha-=0.05; b.scale-=0.05;
+    if(b.alpha<=0 || b.scale<=0) animatingBlocks.splice(index,1);
+  });
+  floatingTexts.forEach((t,index)=>{
+    ctx.globalAlpha=t.alpha;
+    ctx.fillStyle=t.color;
+    ctx.font=`bold ${t.size}px 'Press Start 2P'`;
+    ctx.textAlign='center';
+    ctx.fillText(t.text,t.x,t.y);
+    ctx.globalAlpha=1;
+    t.y-=1.2; t.alpha-=0.03; t.size+=0.3;
+    if(t.alpha<=0) floatingTexts.splice(index,1);
+  });
+  particles.forEach((p,index)=>{
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=p.alpha;
+    ctx.fillRect(p.x,p.y,p.size,p.size);
+    ctx.globalAlpha=1;
+    p.x+=p.vx; p.y+=p.vy; p.alpha-=0.03; p.size*=0.95;
+    if(p.alpha<=0) particles.splice(index,1);
+  });
+  requestAnimationFrame(drawBoard);
+}
+
+function generateContainerBlocks(){
+  while(containerBlocks.length<3){
+    const idx=Math.floor(Math.random()*blockShapes.length);
+    const block={...blockShapes[idx],x: containerBlocks.length*140+10, y:10, w:blockShapes[idx].shape[0].length*cellSize, h:blockShapes[idx].shape.length*cellSize};
+    containerBlocks.push(block);
+  }
+}
+
+function drawContainer(){
+  bctx.clearRect(0,0,blocksCanvas.width,blocksCanvas.height);
+  containerBlocks.forEach(block=>{
+    for(let i=0;i<block.shape.length;i++){
+      for(let j=0;j<block.shape[i].length;j++){
+        if(block.shape[i][j]){
+          bctx.fillStyle=block.color;
+          bctx.fillRect(block.x+j*cellSize,block.y+i*cellSize,cellSize,cellSize);
+          bctx.strokeStyle='#111';
+          bctx.strokeRect(block.x+j*cellSize,block.y+i*cellSize,cellSize,cellSize);
+        }
+      }
+    }
+  });
+  requestAnimationFrame(drawContainer);
+}
+
+blocksCanvas.addEventListener('click',e=>{
+  const rect=blocksCanvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left;
+  const my=e.clientY-rect.top;
+  for(let b of containerBlocks){
+    if(mx>=b.x && mx<=b.x+b.w && my>=b.y && my<=b.y+b.h){
+      selectedBlock=b;
+    }
+  }
+});
+
+canvas.addEventListener('mousemove',e=>{
+  if(!selectedBlock){ previewPos={x:-1,y:-1}; return; }
+  const rect=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/cellSize);
+  const y=Math.floor((e.clientY-rect.top)/cellSize);
+  previewPos={x,y};
+});
+
+canvas.addEventListener('click',e=>{
+  if(!selectedBlock) return;
+  const rect=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/cellSize);
+  const y=Math.floor((e.clientY-rect.top)/cellSize);
+  placeBlock(x,y);
+});
+
+function canPlaceBlock(x,y,shape){
+  for(let i=0;i<shape.length;i++){
+    for(let j=0;j<shape[i].length;j++){
+      if(shape[i][j]){
+        const r=y+i;
+        const c=x+j;
+        if(r>=rows||c>=cols||board[r][c]) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function placeBlock(x,y){
+  if(!selectedBlock) return;
+  if(!canPlaceBlock(x,y,selectedBlock.shape)) return;
+  for(let i=0;i<selectedBlock.shape.length;i++){
+    for(let j=0;j<selectedBlock.shape[i].length;j++){
+      if(selectedBlock.shape[i][j]){
+        const r=y+i;
+        const c=x+j;
+        board[r][c]=selectedBlock.color;
+      }
+    }
+  }
+  score+=selectedBlock.shape.flat().filter(n=>n).length;
+  scoreBoard.textContent='Score: '+score;
+  placeSound.currentTime=0; placeSound.play();
+  usedBlocksCount++;
+  // Remove block from container
+  containerBlocks=containerBlocks.filter(b=>b!==selectedBlock);
+  // Regenerate 3 new block if all used
+  if(usedBlocksCount>=3){
+    containerBlocks=[];
+    usedBlocksCount=0;
+    generateContainerBlocks();
+  }
+  selectedBlock=null;
+  clearFullLines();
+}
+
+function createParticles(x,y,color){
+  for(let i=0;i<15;i++){
+    particles.push({
+      x:x,
+      y:y,
+      vx:(Math.random()-0.5)*3,
+      vy:(Math.random()-0.5)*3,
+      size:5+Math.random()*5,
+      color:color,
+      alpha:1
+    });
+  }
+}
+
+function clearFullLines(){
+  let clearedCount=0;
+  let text='', textColor='#fff', positions=[];
+  for(let r=0;r<rows;r++){
+    if(board[r].every(cell=>cell)){
+      clearedCount+=1;
+      for(let c=0;c<cols;c++){
+        animatingBlocks.push({r,c,color:board[r][c],alpha:1,scale:1});
+        positions.push({x:c*cellSize+cellSize/2,y:r*cellSize+cellSize/2});
+        createParticles(c*cellSize+cellSize/2,r*cellSize+cellSize/2,board[r][c]);
+        board[r][c]=null;
+      }
+    }
+  }
+  for(let c=0;c<cols;c++){
+    let full=true;
+    for(let r=0;r<rows;r++){
+      if(!board[r][c]) full=false;
+    }
+    if(full){
+      clearedCount+=1;
+      for(let r=0;r<rows;r++){
+        animatingBlocks.push({r,c,color:board[r][c],alpha:1,scale:1});
+        positions.push({x:c*cellSize+cellSize/2,y:r*cellSize+cellSize/2});
+        createParticles(c*cellSize+cellSize/2,r*cellSize+cellSize/2,board[r][c]);
+        board[r][c]=null;
+      }
+    }
+  }
+  if(clearedCount>0){
+    if(clearedCount<=2){ goodSound.play(); text='GOOD!'; textColor='lime'; }
+    else if(clearedCount<=4){ greatSound.play(); text='GREAT!'; textColor='yellow'; }
+    else{ excellentSound.play(); text='EXCELLENT!'; textColor='orange'; }
+    positions.forEach(pos=>{
+      floatingTexts.push({text:text, x:pos.x, y:pos.y, alpha:1, size:20, color:textColor});
+    });
+  }
+}
+
+restartBtn.addEventListener('click',()=>{initBoard();});
+toggleSoundBtn.addEventListener('click',()=>{
+  if(bgSound.paused) bgSound.play();
+  else bgSound.pause();
+});
+
+initBoard();
+drawBoard();
+drawContainer();
+</script>
+</body>
+</html>

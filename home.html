@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pusat Game</title>
+  <!-- Font Awesome (untuk icon) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0b0f1a, #1e2b4a);
+      color: white;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 40px;
+      font-size: 2.5rem;
+    }
+    p {
+      font-size: 1.2rem;
+      margin-bottom: 40px;
+    }
+    .game-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      padding: 0 20px 60px;
+    }
+    .game-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.08);
+      padding: 20px 30px;
+      border-radius: 16px;
+      text-decoration: none;
+      color: white;
+      font-size: 1.1rem;
+      width: 220px;
+      justify-content: center;
+      transition: background 0.3s, transform 0.2s;
+    }
+    .game-card:hover {
+      background: rgba(255,255,255,0.18);
+      transform: translateY(-4px);
+    }
+    .game-card i {
+      font-size: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Playing Arr Games Site</h1>
+  <p>Pilih salah satu game di bawah ini:</p>
+
+  <div class="game-list">
+    <a href="breakout.html" class="game-card">
+      <i class="fas fa-table-tennis"></i>
+      <span>Breakout 20 Level</span>
+    </a>
+    <a href="home.html" class="game-card">
+      <i class="fas fa-home"></i>
+      <span>Game Home</span>
+    </a>
+    <a href="chess.html" class="game-card">
+      <i class="fas fa-chess"></i>
+      <span>Catur</span>
+    </a>
+    <a href="puzzle.html" class="game-card">
+      <i class="fas fa-puzzle-piece"></i>
+      <span>Puzzle</span>
+    </a>
+    <a href="math.html" class="game-card">
+      <i class="fas fa-square-root-alt"></i>
+      <span>Matematika</span>
+    </a>
+  </div>
+</body>
+</html>

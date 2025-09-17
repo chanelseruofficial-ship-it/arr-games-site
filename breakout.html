@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breakout 20 Level</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="home.html" class="back-btn">⬅️ Kembali ke Home</a>
+  <h2>🎮 Breakout 20 Level 🎮</h2>
+  <div id="info"></div>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <!-- Modal Game Over -->
+  <div id="gameOverModal" class="modal">
+    <div class="modal-content">
+      <h2>💀 Game Over 💀</h2>
+      <p>Skor kamu: <span id="finalScore"></span></p>
+      <button id="restartBtn">Main Lagi</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Paddle
+    const paddleHeight = 12;
+    const paddleWidth = 120;
+    let paddleX = (canvas.width - paddleWidth) / 2;
+
+    // Bola
+    const ballRadius = 7;
+    let balls = [
+      { x: canvas.width / 2, y: canvas.height - 40, dx: 3, dy: -3, unlocked: false }
+    ];
+
+    let rightPressed = false;
+    let leftPressed = false;
+
+    // Balok
+    const brickRowCount = 8;
+    const brickColumnCount = 12;
+    const brickWidth = 50;
+    const brickHeight = 14;
+    const brickPadding = 6;
+    const brickOffsetTop = 20;  // jarak balok dari atas lebih rapat
+    const brickOffsetLeft = 15;
+
+    let bricks = [];
+    let score = 0;
+    let level = 1;
+    const maxLevel = 20;
+
+    const levelBackgrounds = [
+      "#001f3f","#0074D9","#7FDBFF","#39CCCC","#3D9970",
+      "#2ECC40","#01FF70","#FFDC00","#FF851B","#FF4136",
+      "#85144b","#B10DC9","#111111","#AAAAAA","#F012BE",
+      "#01FF99","#5f27cd","#10ac84","#ff9f43","#e84118"
+    ];
+
+    const levelLayouts = [];
+    let barriers = [];
+
+    function generateLayout(lv) {
+      const layout = [];
+      for (let c = 0; c < brickColumnCount; c++) {
+        layout[c] = [];
+        for (let r = 0; r < brickRowCount; r++) {
+          layout[c][r] = Math.random() > 0.2 ? 1 : 0;
+        }
+      }
+      levelLayouts[lv] = layout;
+    }
+
+    function initBricks() {
+      if (!levelLayouts[level]) generateLayout(level);
+      const lay = levelLayouts[level];
+      bricks = [];
+      for (let c = 0; c < brickColumnCount; c++) {
+        bricks[c] = [];
+        for (let r = 0; r < brickRowCount; r++) {
+          bricks[c][r] = { x: 0, y: 0, status: lay[c][r] };
+        }
+      }
+    }
+
+    function initBarriers() {
+      const wallY = brickOffsetTop + brickRowCount * (brickHeight + brickPadding) + 15;
+      const openW = 40;
+      const total = canvas.width;
+      const gap1 = Math.random() * (total / 2 - openW);
+      const gap2 = Math.random() * (total / 2 - openW) + total / 2;
+
+      barriers = [
+        { x: 0, y: wallY, w: gap1, h: 10 },
+        { x: gap1 + openW, y: wallY, w: gap2 - (gap1 + openW), h: 10 },
+        { x: gap2 + openW, y: wallY, w: total - (gap2 + openW), h: 10 }
+      ];
+    }
+
+    initBricks();
+    initBarriers();
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowRight" || e.key === "Right") rightPressed = true;
+      if (e.key === "ArrowLeft" || e.key === "Left") leftPressed = true;
+    });
+    document.addEventListener("keyup", e => {
+      if (e.key === "ArrowRight" || e.key === "Right") rightPressed = false;
+      if (e.key === "ArrowLeft" || e.key === "Left") leftPressed = false;
+    });
+    document.addEventListener("mousemove", e => {
+      const rel = e.clientX - canvas.offsetLeft;
+      if (rel > 0 && rel < canvas.width) paddleX = rel - paddleWidth / 2;
+    });
+
+    document.getElementById("restartBtn").addEventListener("click", () => {
+      document.location.reload();
+    });
+
+    function collisionDetection() {
+      balls.forEach(ball => {
+        for (let c = 0; c < brickColumnCount; c++) {
+          for (let r = 0; r < brickRowCount; r++) {
+            const b = bricks[c][r];
+            if (b.status === 1 && ball.unlocked) {
+              if (ball.x > b.x && ball.x < b.x + brickWidth &&
+                  ball.y > b.y && ball.y < b.y + brickHeight) {
+                ball.dy = -ball.dy;
+                b.status = 0;
+                score += 10;
+                if (balls.length < 5) {
+                  balls.push({ x: ball.x, y: ball.y, dx: -ball.dx, dy: ball.dy, unlocked: true });
+                }
+                if (isLevelComplete()) nextLevel();
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function isLevelComplete() {
+      return bricks.flat().every(b => b.status === 0);
+    }
+
+    function nextLevel() {
+      if (level >= maxLevel) {
+        document.getElementById("finalScore").textContent = score;
+        document.getElementById("gameOverModal").style.display = "flex";
+        return;
+      }
+      level++;
+      initBricks();
+      initBarriers();
+      balls = [{ x: canvas.width/2, y: canvas.height-40,
+                 dx: 3 + level*0.3, dy: -3 - level*0.3, unlocked: false }];
+    }
+
+    function drawBall(b) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, ballRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawPaddle() {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(paddleX, canvas.height - paddleHeight - 5, paddleWidth, paddleHeight);
+    }
+
+    function drawBricks() {
+      bricks.forEach((col, ci) => col.forEach((brick, ri) => {
+        if (brick.status === 1) {
+          const bx = brick.x = brickOffsetLeft + ci * (brickWidth + brickPadding);
+          const by = brick.y = brickOffsetTop + ri * (brickHeight + brickPadding);
+          ctx.fillStyle = "#eee";
+          ctx.fillRect(bx, by, brickWidth, brickHeight);
+        }
+      }));
+    }
+
+    function drawBarriers() {
+      ctx.fillStyle = "#ff0";
+      barriers.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = levelBackgrounds[level - 1] || "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawBricks();
+      drawBarriers();
+      drawPaddle();
+      balls.forEach(drawBall);
+
+      collisionDetection();
+
+      balls.forEach(ball => {
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        if (ball.x + ball.dx > canvas.width - ballRadius || ball.x + ball.dx < ballRadius) {
+          ball.dx = -ball.dx;
+          ball.unlocked = true;
+        }
+        if (ball.y + ball.dy < ballRadius) {
+          ball.dy = -ball.dy;
+          ball.unlocked = true;
+        }
+
+        barriers.forEach(w => {
+          if (ball.x > w.x - ballRadius &&
+              ball.x < w.x + w.w + ballRadius &&
+              ball.y + ball.dy > w.y &&
+              ball.y + ball.dy < w.y + w.h) {
+            ball.dy = -ball.dy;
+            ball.unlocked = true;
+          }
+        });
+
+        if (ball.y + ball.dy > canvas.height - ballRadius) {
+          if (ball.x > paddleX && ball.x < paddleX + paddleWidth) {
+            ball.dy = -ball.dy;
+          } else {
+            balls.splice(balls.indexOf(ball), 1);
+          }
+        }
+      });
+
+      if (!balls.length) {
+        document.getElementById("finalScore").textContent = score;
+        document.getElementById("gameOverModal").style.display = "flex";
+        return;
+      }
+
+      if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 7;
+      else if (leftPressed && paddleX > 0) paddleX -= 7;
+
+      document.getElementById("info").textContent =
+        `Level: ${level} | Skor: ${score} | Bola: ${balls.length}`;
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+  </script>
+</body>
+</html>

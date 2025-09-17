@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Catur Sederhana dengan AI</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+body{background:#222;color:#fff;font-family:sans-serif;text-align:center;margin:0}
+h1{margin:12px 0}
+#timer{margin:4px;font-size:17px}
+#chessArea{display:none}
+#chessBoard{width:480px;height:480px;margin:18px auto;display:grid;grid-template-columns:repeat(8,1fr);border:6px solid #555;transition: all .3s}
+.cell{width:60px;height:60px;display:flex;align-items:center;justify-content:center;font-size:42px;cursor:pointer;transition: all .3s}
+.lightCell{background:#d2a679;color:#fff}
+.darkCell{background:#8b5e3c;color:#fff}
+.highlight{box-shadow:inset 0 0 0 3px gold}
+#turnText{margin:8px;font-weight:bold}
+#popup{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;justify-content:center;align-items:center;z-index:10}
+#popup div{background:#333;padding:24px;border-radius:10px;text-align:center;animation:popupIn .4s ease-out}
+#popup button{margin:6px;padding:10px 20px;font-size:16px;cursor:pointer}
+@keyframes popupIn{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes winAnim{0%{transform:scale(0.5);opacity:0}50%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
+.winPopup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;justify-content:center;align-items:center;z-index:20;animation:winAnim .6s ease-out}
+.winPopup div{background:green;color:#fff;font-size:28px;padding:30px;border-radius:12px;text-align:center;animation:winAnim .6s ease-out}
+</style>
+</head>
+<body>
+<h1>Game Catur</h1>
+<div id="timer">Waktu: 0 detik</div>
+<div id="chessArea">
+  <div id="turnText"></div>
+  <div id="chessBoard"></div>
+</div>
+<div id="popup">
+  <div>
+    <h2>Pilih Mode Permainan</h2>
+    <button onclick="startChessGame('player')">1 vs 1</button>
+    <button onclick="startChessGame('bot')">Lawan Bot</button>
+  </div>
+</div>
+<script>
+let chessBoard=[], chessSelected=null, chessTurn='white', chessMode='player';
+const pieceSymbols={r:"♜",n:"♞",b:"♝",q:"♛",k:"♚",p:"♟",
+                    R:"♖",N:"♘",B:"♗",Q:"♕",K:"♔",P:"♙"};
+let timer=0, tInt;
+
+function startChessGame(mode){
+  chessMode=mode; timer=0;
+  document.getElementById('timer').textContent='Waktu: 0 detik';
+  clearInterval(tInt);
+  tInt=setInterval(()=>{timer++;document.getElementById('timer').textContent='Waktu: '+timer+' detik';},1000);
+  document.getElementById('popup').style.display='none';
+  document.getElementById('chessArea').style.display='block';
+  chessSelected=null; chessTurn='white';
+  document.getElementById('turnText').innerText='Giliran: Putih';
+  initChessBoard(); renderChessBoard();
+}
+
+function initChessBoard(){
+  chessBoard=[
+    ["r","n","b","q","k","b","n","r"],
+    ["p","p","p","p","p","p","p","p"],
+    ["","","","","","","",""],
+    ["","","","","","","",""],
+    ["","","","","","","",""],
+    ["","","","","","","",""],
+    ["P","P","P","P","P","P","P","P"],
+    ["R","N","B","Q","K","B","N","R"]
+  ];
+}
+
+function renderChessBoard(){
+  const cont=document.getElementById('chessBoard');
+  cont.innerHTML='';
+  for(let i=0;i<8;i++){
+    for(let j=0;j<8;j++){
+      const cell=document.createElement('div');
+      cell.className='cell '+(((i+j)%2===0)?'lightCell':'darkCell');
+      const p=chessBoard[i][j];
+      if(p){
+        cell.textContent=pieceSymbols[p]||p;
+        cell.style.color=(p===p.toUpperCase()?"#fff":"#000");
+        cell.style.textShadow="0 0 4px #000";
+      }
+      cell.onclick=()=>onChessCellClick(i,j);
+      cont.appendChild(cell);
+    }
+  }
+}
+
+function onChessCellClick(i,j){
+  if(chessSelected){
+    const [si,sj]=chessSelected;
+    const moves=getChessValidMoves(si,sj);
+    const valid=moves.some(m=>m[0]===i&&m[1]===j);
+    if(valid){
+      moveChessPiece(si,sj,i,j);
+      chessSelected=null; renderChessBoard();
+      if(!isGameOver() && chessMode==='bot' && chessTurn==='black'){
+        setTimeout(chessBotMove,400);
+      }
+      return;
+    }
+    chessSelected=null; renderChessBoard();
+  }else{
+    const piece=chessBoard[i][j];
+    if(piece && ((chessTurn==='white' && piece===piece.toUpperCase()) ||
+                  (chessTurn==='black' && piece===piece.toLowerCase()))){
+      chessSelected=[i,j]; renderChessBoard();
+      highlightChessMoves(getChessValidMoves(i,j));
+    }
+  }
+}
+
+function highlightChessMoves(moves){
+  const div=document.getElementById('chessBoard');
+  moves.forEach(([x,y])=>{
+    const idx=x*8+y;
+    if(div.children[idx]) div.children[idx].classList.add('highlight');
+  });
+}
+
+function moveChessPiece(si,sj,di,dj){
+  const piece=chessBoard[si][sj];
+  if(chessBoard[di][dj].toLowerCase()==='k'){
+    showWinPopup(chessTurn==='white'?'Putih Menang!':'Hitam Menang!');
+    return;
+  }
+  chessBoard[di][dj]=piece; chessBoard[si][sj]='';
+  chessTurn=(chessTurn==='white'?'black':'white');
+  document.getElementById('turnText').innerText='Giliran: '+(chessTurn==='white'?'Putih':'Hitam');
+}
+
+function getChessValidMoves(i,j){
+  const pc=chessBoard[i][j]; let moves=[]; if(!pc) return moves;
+  const isWhite=pc===pc.toUpperCase(); const dir=isWhite?-1:1;
+  switch(pc.toLowerCase()){
+    case'p':
+      if(chessBoard[i+dir] && chessBoard[i+dir][j]==='') moves.push([i+dir,j]);
+      if((isWhite && i===6)||(!isWhite && i===1)){
+        if(chessBoard[i+dir][j]==='' && chessBoard[i+2*dir][j]==='') moves.push([i+2*dir,j]);
+      }
+      [[i+dir,j-1],[i+dir,j+1]].forEach(([x,y])=>{
+        if(x>=0&&x<8 && y>=0 && y<8 && chessBoard[x][y]){
+          if(isWhite!==(chessBoard[x][y]===chessBoard[x][y].toUpperCase())) moves.push([x,y]);
+        }
+      }); break;
+    case'r': moves.push(...rayMoves(i,j,[[1,0],[-1,0],[0,1],[0,-1]],isWhite)); break;
+    case'n': [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([dx,dy])=>{
+      const x=i+dx,y=j+dy; if(x>=0&&x<8 && y>=0 && y<8){
+        if(!chessBoard[x][y] || isWhite!==(chessBoard[x][y]===chessBoard[x][y].toUpperCase())) moves.push([x,y]);
+      }
+    }); break;
+    case'b': moves.push(...rayMoves(i,j,[[1,1],[1,-1],[-1,1],[-1,-1]],isWhite)); break;
+    case'q': moves.push(...rayMoves(i,j,[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],isWhite)); break;
+    case'k':
+      for(let dx=-1;dx<=1;dx++){
+        for(let dy=-1;dy<=1;dy++){
+          if(dx||dy){ const x=i+dx,y=j+dy;
+            if(x>=0&&x<8 && y>=0 && y<8){
+              if(!chessBoard[x][y] || isWhite!==(chessBoard[x][y]===chessBoard[x][y].toUpperCase())) moves.push([x,y]);
+            }
+          }
+        }
+      } break;
+  } return moves;
+}
+
+function rayMoves(i,j,dirs,isWhite){
+  let res=[];
+  for(let [dx,dy] of dirs){
+    let x=i+dx,y=j+dy;
+    while(x>=0&&x<8 && y>=0&&y<8){
+      if(!chessBoard[x][y]) res.push([x,y]);
+      else { if(isWhite!==(chessBoard[x][y]===chessBoard[x][y].toUpperCase())) res.push([x,y]); break; }
+      x+=dx; y+=dy;
+    }
+  } return res;
+}
+
+// === AI MINIMAX SEDERHANA ===
+function chessBotMove(){
+  let bestScore=-Infinity, bestMove=null;
+  for(let i=0;i<8;i++){for(let j=0;j<8;j++){
+    const p=chessBoard[i][j];
+    if(p && p===p.toLowerCase()){
+      const moves=getChessValidMoves(i,j);
+      moves.forEach(([x,y])=>{
+        const captured=chessBoard[x][y];
+        chessBoard[x][y]=p; chessBoard[i][j]='';
+        const score=evaluateBoard();
+        chessBoard[i][j]=p; chessBoard[x][y]=captured;
+        if(score>bestScore){ bestScore=score; bestMove=[i,j,x,y]; }
+      });
+    }
+  }}
+  if(bestMove){ moveChessPiece(bestMove[0],bestMove[1],bestMove[2],bestMove[3]); renderChessBoard(); }
+}
+
+function evaluateBoard(){let score=0;
+  for(let i=0;i<8;i++){for(let j=0;j<8;j++){
+    const p=chessBoard[i][j]; if(!p) continue;
+    const val={'p':1,'n':3,'b':3,'r':5,'q':9,'k':1000}[p.toLowerCase()]||0;
+    score+=p===p.toLowerCase()?val:-val;
+  }}
+  return score;
+}
+
+function isGameOver(){
+  let w=false,b=false;
+  for(let i=0;i<8;i++){ for(let j=0;j<8;j++){
+    if(chessBoard[i][j]==='K') w=true; if(chessBoard[i][j]==='k') b=true;
+  }} return !(w && b);
+}
+
+function showWinPopup(text){
+  const popup=document.createElement('div'); popup.className='winPopup';
+  const inner=document.createElement('div'); inner.textContent=text; popup.appendChild(inner);
+  document.body.appendChild(popup);
+  setTimeout(()=>location.reload(),2000);
+}
+</script>
+</body>
+</html>
